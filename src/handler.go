@@ -19,7 +19,7 @@ func RecoveryHandler() TcpHandler {
 	return TcpHandleFunc(func(ctx *Context) {
 		defer func() {
 			if r := recover(); r != nil {
-				ctx.logger.Errorf("recovery from %s", r)
+				ctx.Logger.Errorf("recovery from %s", r)
 			}
 			ctx.Close()
 		}()
@@ -29,7 +29,7 @@ func RecoveryHandler() TcpHandler {
 
 func Pipe() TcpHandler {
 	return TcpHandleFunc(func(ctx *Context) {
-		ctx.logger.Infof("start piping, target addr=%s", ctx.TargetAddr())
+		ctx.Logger.Infof("start piping, target addr=%s", ctx.TargetAddr())
 
 		var wg sync.WaitGroup
 		wg.Add(2)
@@ -47,6 +47,6 @@ func Pipe() TcpHandler {
 		}()
 
 		wg.Wait()
-		ctx.logger.Infof("finish piping")
+		ctx.Logger.Infof("finish piping")
 	})
 }
