@@ -21,10 +21,10 @@ var (
 )
 
 func parse() {
-	flag.StringVar(&agentIp, "ip", "0.0.0.0", "socks server ip")
-	flag.StringVar(&agentPort, "port", "1080", "socks server port")
-	flag.StringVar(&serverIp, "ip", "0.0.0.0", "socks agent ip")
-	flag.StringVar(&serverPort, "port", "1081", "socks agent port")
+	flag.StringVar(&agentIp, "agent-ip", "0.0.0.0", "socks agent ip")
+	flag.StringVar(&agentPort, "agent-port", "1080", "socks agent port")
+	flag.StringVar(&serverIp, "server-ip", "0.0.0.0", "socks server ip")
+	flag.StringVar(&serverPort, "server-port", "1081", "socks server port")
 
 	flag.Parse()
 }
