@@ -15,7 +15,7 @@ const (
 
 type Context struct {
 	correlationId uuid.UUID
-	logger        *logrus.Entry
+	Logger        *logrus.Entry
 	from          net.Conn
 
 	// for middleware
@@ -39,8 +39,8 @@ func NewContext(from net.Conn, handlers []TcpHandler) *Context {
 		nextIndex:     -1,
 		buf:           make([]byte, maxBufferSize),
 	}
-	ctx.logger = logrus.WithField("id", ctx.correlationId)
-	ctx.logger.Infof("new connection from %s", from.RemoteAddr().String())
+	ctx.Logger = logrus.WithField("id", ctx.correlationId)
+	ctx.Logger.Infof("new connection from %s", from.RemoteAddr().String())
 	return ctx
 }
 
@@ -75,11 +75,15 @@ func (c *Context) SetAuthMethod(m byte) {
 
 func (c *Context) Error(err error) {
 	if err != nil {
-		c.logger.Error(err)
+		c.Logger.Error(err)
 	}
 	c.Abort()
 }
 
 func (c *Context) TargetAddr() string {
 	return fmt.Sprintf("%s:%s", c.Host, c.Port)
+}
+
+func (c *Context) SourceConn() net.Conn {
+	return c.from
 }

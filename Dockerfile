@@ -8,6 +8,12 @@ RUN make binaries
 
 FROM golang:1.19 as proxyServer
 
-COPY --from=build /go/bin/s5proxy /usr/bin/s5proxy
+COPY --from=build /go/bin/s5server /usr/bin/s5server
 
-ENTRYPOINT ["/usr/bin/s5proxy"]
+ENTRYPOINT ["/usr/bin/s5server"]
+
+FROM golang:1.19 as proxyAgent
+
+COPY --from=build /go/bin/s5agent /usr/bin/s5agent
+
+ENTRYPOINT ["/usr/bin/s5agent"]
