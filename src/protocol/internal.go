@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"socks5-proxy/src"
 	"time"
+
+	"socks5-proxy/src"
 )
 
 var clientSecretKey = []byte("dfb06f") // hard code for now
@@ -38,6 +39,7 @@ func ClientSayHello(timeout time.Duration, addr net.Addr) src.TcpHandler {
 		if bytes.Equal(buf, serverSecretKey) {
 			ctx.Logger.Info("handshake successfully")
 			ctx.To = target
+			ctx.Host = target.RemoteAddr().String()
 		} else {
 			ctx.Error(fmt.Errorf("secret key mismatch, key=%s", string(buf)))
 		}

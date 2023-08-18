@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"socks5-proxy/src"
 	"strconv"
 	"time"
+
+	"socks5-proxy/src"
 )
 
 const (
