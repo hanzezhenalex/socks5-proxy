@@ -243,6 +243,6 @@ func commandErrorReply(rep byte, buf []byte) []byte {
 func commandSuccessReply(c *Context) []byte {
 	buf := c.Buffer()
 	buf = buf[:0]
-	buf = append(buf, version, succeed, rsv, ipv4)
+	buf = append(buf, version, succeed, rsv)
 	return parseAddr(c.To.LocalAddr().String(), buf)
 }
