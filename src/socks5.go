@@ -214,14 +214,16 @@ func parseAddr(s string, buf []byte) []byte {
 	if ip == nil {
 		// domain name
 		buf = append(buf, domain, byte(len(ip)))
+		buf = append(buf, []byte(host)...)
 	} else {
 		if ip4 := ip.To4(); ip4 != nil {
 			buf = append(buf, ipv4)
+			buf = append(buf, ip4...)
 		} else {
 			buf = append(buf, ipv6)
+			buf = append(buf, ip...)
 		}
 	}
-	buf = append(buf, ip...)
 
 	portn, _ := strconv.ParseUint(port, 10, 16)
 	buf = append(buf, byte(portn>>8), byte(portn))
@@ -241,6 +243,6 @@ func commandErrorReply(rep byte, buf []byte) []byte {
 func commandSuccessReply(c *Context) []byte {
 	buf := c.Buffer()
 	buf = buf[:0]
-	buf = append(buf, version, succeed, rsv, ipv4)
+	buf = append(buf, version, succeed, rsv)
 	return parseAddr(c.To.LocalAddr().String(), buf)
 }

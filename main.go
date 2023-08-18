@@ -18,7 +18,7 @@ var (
 )
 
 func parse() {
-	flag.StringVar(&ip, "ip", "127.0.0.1", "socks server ip")
+	flag.StringVar(&ip, "ip", "0.0.0.0", "socks server ip")
 	flag.StringVar(&port, "port", "1080", "socks server port")
 
 	flag.Parse()
