@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -18,6 +19,8 @@ var (
 	serverIp   string
 	serverPort string
 )
+
+const defaultDialTimeout = time.Second * 30
 
 func parse() {
 	flag.StringVar(&agentIp, "agent-ip", "0.0.0.0", "socks agent ip")
@@ -46,13 +49,17 @@ func main() {
 	s := src.NewTcpServer(agentAddr)
 	s.Use(src.RecoveryHandler())
 
+	dialer := &net.Dialer{
+		Timeout: defaultDialTimeout,
+	}
 	s.Use(
 		protocol.AuthMethodNegotiation([]byte{protocol.NoAuthenticationRequired}),
 		protocol.Auth(),
-		protocol.ClientSayHello(serverAddr),
+		protocol.ClientSayHello(dialer, serverAddr),
 	)
 
-	s.SetFinalHandler(src.PipeHandler())
+	mngr := src.NewConnectionMngr()
+	s.SetFinalHandler(mngr.PipeHandler())
 
 	if err := s.ListenAndServe(); err != nil {
 		logrus.Errorf("an error happened when serve tcp, err=%s", err.Error())

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -17,6 +18,8 @@ var (
 	port  string
 	local bool
 )
+
+const defaultDialTimeout = time.Second * 30
 
 func parse() {
 	flag.StringVar(&ip, "ip", "0.0.0.0", "socks server ip")
@@ -36,10 +39,11 @@ func main() {
 	}
 
 	s := src.NewTcpServer(addr)
+	mngr := src.NewConnectionMngr()
 
 	s.Use(src.RecoveryHandler())
 	registerMiddlewares(s, local)
-	s.SetFinalHandler(src.PipeHandler())
+	s.SetFinalHandler(mngr.PipeHandler())
 
 	if err := s.ListenAndServe(); err != nil {
 		logrus.Errorf("an error happened when serve tcp, err=%s", err.Error())
@@ -48,20 +52,23 @@ func main() {
 }
 
 func registerMiddlewares(s *src.TcpServer, local bool) {
+	dialer := &net.Dialer{
+		Timeout: defaultDialTimeout,
+	}
 	if local {
 		logrus.Info("running in local mode")
 		s.Use(
 			protocol.AuthMethodNegotiation([]byte{protocol.NoAuthenticationRequired}),
 			protocol.Auth(),
 			protocol.CommandNegotiation([]byte{protocol.Connect}),
-			protocol.Command(),
+			protocol.Command(dialer),
 		)
 	} else {
 		logrus.Info("running in remote mode")
 		s.Use(
 			protocol.ServerSayHello(),
 			protocol.CommandNegotiation([]byte{protocol.Connect}),
-			protocol.Command(),
+			protocol.Command(dialer),
 		)
 	}
 }

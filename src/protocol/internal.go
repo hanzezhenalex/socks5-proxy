@@ -11,10 +11,9 @@ import (
 var clientSecretKey = []byte("dfb06f") // hard code for now
 var serverSecretKey = []byte("be6048")
 
-func ClientSayHello(addr net.Addr) src.TcpHandler {
+func ClientSayHello(dialer src.Dialer, addr net.Addr) src.TcpHandler {
 	return src.TcpHandleFunc(func(ctx *src.Context) {
-		p := src.NewPipe(ctx, nil)
-		addr, err := p.Dial(addr.String())
+		conn, err := dialer.Dial("tcp", addr.String())
 		if err != nil {
 			ctx.Logger.Errorf("fail to connect to target conn, err=%s", err.Error())
 			ctx.AbortAndCloseSourceConn()
@@ -22,7 +21,7 @@ func ClientSayHello(addr net.Addr) src.TcpHandler {
 		}
 
 		ctx.Logger.Info("client say hello")
-		if _, err := p.Write(clientSecretKey); err != nil {
+		if _, err := conn.Write(clientSecretKey); err != nil {
 			ctx.Logger.Errorf("fail to say hello, err=%s", err.Error())
 			ctx.AbortAndCloseSourceConn()
 			return
@@ -32,7 +31,7 @@ func ClientSayHello(addr net.Addr) src.TcpHandler {
 		buf = buf[:len(serverSecretKey)]
 
 		ctx.Logger.Info("waiting for server")
-		if _, err := io.ReadFull(p, buf); err != nil {
+		if _, err := io.ReadFull(conn, buf); err != nil {
 			ctx.Logger.Errorf("fail to recieve hello, err=%s", err.Error())
 			ctx.AbortAndCloseSourceConn()
 			return
@@ -40,8 +39,8 @@ func ClientSayHello(addr net.Addr) src.TcpHandler {
 
 		if bytes.Equal(buf, serverSecretKey) {
 			ctx.Logger.Info("handshake successfully")
-			ctx.Pipe = p
-			ctx.Host = addr
+			ctx.SetTargetConn(conn)
+			ctx.Host = conn.RemoteAddr().String()
 		} else {
 			ctx.Logger.Errorf("secret key mismatch, key=%s", string(buf))
 			ctx.AbortAndCloseSourceConn()
