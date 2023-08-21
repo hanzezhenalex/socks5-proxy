@@ -18,13 +18,10 @@ type Pipe struct {
 func NewPipe(ctx *Context, stat *Statistic) *Pipe {
 	return &Pipe{
 		ctx:    ctx,
-		source: ctx.from,
+		source: ctx.SourceConn(),
+		target: ctx.TargetConn(),
 		stat:   stat,
 	}
-}
-
-func (p *Pipe) SetStatistic(stat *Statistic) {
-	p.stat = stat
 }
 
 func (p *Pipe) Read(buf []byte) (int, error) {

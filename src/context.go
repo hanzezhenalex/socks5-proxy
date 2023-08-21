@@ -87,6 +87,10 @@ func (c *Context) SourceConn() net.Conn {
 	return c.from
 }
 
+func (c *Context) TargetConn() net.Conn {
+	return c.to
+}
+
 func (c *Context) SetTargetConn(conn net.Conn) {
 	c.to = conn
 }
