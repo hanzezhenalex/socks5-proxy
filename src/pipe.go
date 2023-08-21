@@ -44,15 +44,16 @@ func (p *Pipe) Close() error {
 }
 
 func (p *Pipe) readLoop() {
-	loop(p.source, p.target, p.ctx.Logger.WithField("loop", "read"))
+	_, err := io.Copy(p.source, p)
+	handleLoopError(err, p.source, p.target, p.ctx.Logger.WithField("loop", "read"))
 }
 
 func (p *Pipe) writeLoop() {
-	loop(p.target, p.source, p.ctx.Logger.WithField("loop", "write"))
+	_, err := io.Copy(p, p.source)
+	handleLoopError(err, p.target, p.source, p.ctx.Logger.WithField("loop", "write"))
 }
 
-func loop(source, target net.Conn, logger *logrus.Entry) {
-	_, err := io.Copy(source, target)
+func handleLoopError(err error, source, target net.Conn, logger *logrus.Entry) {
 	if err != nil {
 		logger.Errorf("loop err: %s", err.Error())
 		if rErr, ok := err.(*net.OpError); ok {
