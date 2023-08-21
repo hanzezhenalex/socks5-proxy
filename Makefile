@@ -19,7 +19,7 @@ debug_server_remote:
 
 debug_server_local:
 	go build -gcflags="all=-N -l" -o $(GOPATH)/bin/s5server ./src/cmd/server/main.go
-	dlv --listen=:2345 --headless=true --api-version=2 exec $(GOPATH)/bin/s5server
+	dlv --listen=:2345 --headless=true --api-version=2 exec $(GOPATH)/bin/s5server -- --local
 
 # docker
 docker_agent:
