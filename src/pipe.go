@@ -1,12 +1,13 @@
 package src
 
 import (
-	"github.com/sirupsen/logrus"
 	"io"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 const defaultDialTimeout = time.Second * 30
