@@ -2,10 +2,8 @@ package protocol
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net"
-	"time"
 
 	"socks5-proxy/src"
 )
@@ -13,17 +11,20 @@ import (
 var clientSecretKey = []byte("dfb06f") // hard code for now
 var serverSecretKey = []byte("be6048")
 
-func ClientSayHello(timeout time.Duration, addr net.Addr) src.TcpHandler {
+func ClientSayHello(addr net.Addr) src.TcpHandler {
 	return src.TcpHandleFunc(func(ctx *src.Context) {
-		target, err := net.DialTimeout("tcp", addr.String(), timeout)
+		p := src.NewPipe(ctx, nil)
+		addr, err := p.Dial(addr.String())
 		if err != nil {
-			ctx.Error(err)
+			ctx.Logger.Errorf("fail to connect to target conn, err=%s", err.Error())
+			ctx.AbortAndCloseSourceConn()
 			return
 		}
 
 		ctx.Logger.Info("client say hello")
-		if _, err := target.Write(clientSecretKey); err != nil {
-			ctx.Error(err)
+		if _, err := p.Write(clientSecretKey); err != nil {
+			ctx.Logger.Errorf("fail to say hello, err=%s", err.Error())
+			ctx.AbortAndCloseSourceConn()
 			return
 		}
 
@@ -31,17 +32,19 @@ func ClientSayHello(timeout time.Duration, addr net.Addr) src.TcpHandler {
 		buf = buf[:len(serverSecretKey)]
 
 		ctx.Logger.Info("waiting for server")
-		if _, err := io.ReadFull(target, buf); err != nil {
-			ctx.Error(err)
+		if _, err := io.ReadFull(p, buf); err != nil {
+			ctx.Logger.Errorf("fail to recieve hello, err=%s", err.Error())
+			ctx.AbortAndCloseSourceConn()
 			return
 		}
 
 		if bytes.Equal(buf, serverSecretKey) {
 			ctx.Logger.Info("handshake successfully")
-			ctx.To = target
-			ctx.Host = target.RemoteAddr().String()
+			ctx.Pipe = p
+			ctx.Host = addr
 		} else {
-			ctx.Error(fmt.Errorf("secret key mismatch, key=%s", string(buf)))
+			ctx.Logger.Errorf("secret key mismatch, key=%s", string(buf))
+			ctx.AbortAndCloseSourceConn()
 		}
 	})
 }
@@ -52,20 +55,23 @@ func ServerSayHello() src.TcpHandler {
 		buf := ctx.Buffer()
 		buf = buf[:len(clientSecretKey)]
 
-		ctx.Logger.Info("waiting for client")
+		ctx.Logger.Debug("waiting for client")
 		if _, err := io.ReadFull(conn, buf); err != nil {
-			ctx.Error(err)
+			ctx.Logger.Errorf("fail to recieve hello, err=%s", err.Error())
+			ctx.Abort()
 			return
 		}
 
 		if !bytes.Equal(buf, clientSecretKey) {
-			ctx.Error(fmt.Errorf("secret key mismatch, key=%s", string(buf)))
+			ctx.Logger.Errorf("secret key mismatch, key=%s", string(buf))
+			ctx.AbortAndCloseSourceConn()
 			return
 		}
 
-		ctx.Logger.Info("server say hello")
+		ctx.Logger.Debug("server say hello")
 		if _, err := conn.Write(serverSecretKey); err != nil {
-			ctx.Error(err)
+			ctx.Logger.Errorf("fail to send hello, err=%s", err.Error())
+			ctx.Abort()
 			return
 		}
 
