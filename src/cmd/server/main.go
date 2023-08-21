@@ -36,9 +36,20 @@ func main() {
 	}
 
 	s := src.NewTcpServer(addr)
-	s.Use(src.RecoveryHandler())
 
+	s.Use(src.RecoveryHandler())
+	registerMiddlewares(s, local)
+	s.SetFinalHandler(src.PipeHandler())
+
+	if err := s.ListenAndServe(); err != nil {
+		logrus.Errorf("an error happened when serve tcp, err=%s", err.Error())
+		os.Exit(1)
+	}
+}
+
+func registerMiddlewares(s *src.TcpServer, local bool) {
 	if local {
+		logrus.Info("running in local mode")
 		s.Use(
 			protocol.AuthMethodNegotiation([]byte{protocol.NoAuthenticationRequired}),
 			protocol.Auth(),
@@ -46,17 +57,11 @@ func main() {
 			protocol.Command(),
 		)
 	} else {
+		logrus.Info("running in remote mode")
 		s.Use(
 			protocol.ServerSayHello(),
 			protocol.CommandNegotiation([]byte{protocol.Connect}),
 			protocol.Command(),
 		)
-	}
-
-	s.SetFinalHandler(src.PipeHandler())
-
-	if err := s.ListenAndServe(); err != nil {
-		logrus.Errorf("an error happened when serve tcp, err=%s", err.Error())
-		os.Exit(1)
 	}
 }
