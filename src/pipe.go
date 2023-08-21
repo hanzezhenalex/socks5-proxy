@@ -1,6 +1,7 @@
 package src
 
 import (
+	"github.com/sirupsen/logrus"
 	"io"
 	"net"
 	"sync"
@@ -61,34 +62,36 @@ func (p *Pipe) Close() error {
 }
 
 func (p *Pipe) readLoop() {
-	_, err := io.Copy(p.source, p)
-	if err != nil {
-		p.ctx.Logger.Errorf("read loop err: %s", err.Error())
-		if rErr, ok := err.(*net.OpError); ok && rErr.Op == "read" {
-			if err := p.target.Close(); err != nil {
-				p.ctx.Logger.Warningf("fail to close target conn, err=%s", err.Error())
-			}
-		}
-	}
-
-	if err := p.source.Close(); err != nil {
-		p.ctx.Logger.Warningf("fail to close source conn, err=%s", err.Error())
-	}
+	loop(p.source, p.target, p.ctx.Logger.WithField("loop", "read"))
 }
 
 func (p *Pipe) writeLoop() {
-	_, err := io.Copy(p, p.source)
+	loop(p.target, p.source, p.ctx.Logger.WithField("loop", "write"))
+}
+
+func loop(source, target net.Conn, logger *logrus.Entry) {
+	_, err := io.Copy(source, target)
 	if err != nil {
-		p.ctx.Logger.Errorf("write loop err: %s", err.Error())
-		if rErr, ok := err.(*net.OpError); ok && rErr.Op == "read" {
-			if err := p.source.Close(); err != nil {
-				p.ctx.Logger.Warningf("fail to close target conn, err=%s", err.Error())
+		logger.Errorf("loop err: %s", err.Error())
+		if rErr, ok := err.(*net.OpError); ok {
+			switch rErr.Op {
+			case "read":
+				if err := target.(*net.TCPConn).CloseWrite(); err != nil {
+					logger.Warningf("fail to close(write) target conn, err=%s", err.Error())
+				}
+			case "write":
+				if err := source.(*net.TCPConn).CloseRead(); err != nil {
+					logger.Warningf("fail to close(read) source conn, err=%s", err.Error())
+				}
 			}
 		}
+		return
 	}
-
-	if err := p.target.Close(); err != nil {
-		p.ctx.Logger.Warningf("fail to close target conn, err=%s", err.Error())
+	if err := source.(*net.TCPConn).CloseRead(); err != nil {
+		logger.Warningf("fail to close(read) source conn, err=%s", err.Error())
+	}
+	if err := target.(*net.TCPConn).CloseWrite(); err != nil {
+		logger.Warningf("fail to close(write) target conn, err=%s", err.Error())
 	}
 }
 
