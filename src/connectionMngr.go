@@ -8,7 +8,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const defaultAnalysisDur = time.Minute
+const (
+	defaultAnalysisDur = 2 * time.Minute
+	updateDur          = 24 * time.Hour
+)
 
 var _logger = logrus.WithField("comp", "mngr")
 
@@ -39,11 +42,19 @@ func NewConnectionMngr() *ConnectionMngr {
 }
 
 func (mngr *ConnectionMngr) daemon() {
-	timer := time.NewTimer(defaultAnalysisDur)
+	analysisT := time.NewTicker(defaultAnalysisDur)
+	updateT := time.NewTicker(updateDur)
 	for {
-		<-timer.C
-		_logger.Infof("[statistic] active=%d, read=%d, written=%d",
-			atomic.LoadInt32(&mngr.active), atomic.LoadInt64(&mngr.stat.read), atomic.LoadInt64(&mngr.stat.written))
+		select {
+		case <-analysisT.C:
+			_logger.Infof("[statistic] active=%d, read=%d, written=%d",
+				atomic.LoadInt32(&mngr.active), atomic.LoadInt64(&mngr.stat.read), atomic.LoadInt64(&mngr.stat.written))
+		case <-updateT.C:
+			_logger.Infof("[statistic] served read=%d, written=%d in last %f hours",
+				atomic.LoadInt64(&mngr.stat.read), atomic.LoadInt64(&mngr.stat.written), updateDur.Hours())
+			atomic.StoreInt64(&mngr.stat.read, 0)
+			atomic.StoreInt64(&mngr.stat.written, 0)
+		}
 	}
 }
 
