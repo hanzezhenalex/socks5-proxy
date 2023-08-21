@@ -131,14 +131,13 @@ func CommandNegotiation(allowedMethods []byte) src.TcpHandler {
 	})
 }
 
-func Command() src.TcpHandler {
+func Command(dialer src.Dialer) src.TcpHandler {
 	return src.TcpHandleFunc(func(ctx *src.Context) {
 		conn := ctx.SourceConn()
 
 		switch ctx.Cmd {
 		case Connect:
-			p := src.NewPipe(ctx, nil)
-			addr, err := p.Dial(ctx.TargetAddr())
+			target, err := dialer.Dial("tcp", ctx.TargetAddr())
 			if err != nil {
 				ctx.Logger.Errorf("fail to connect to target conn, err=%s", err.Error())
 				if _, err := conn.Write(commandErrorReply(networkUnreachable, ctx.Buffer())); err != nil {
@@ -149,10 +148,10 @@ func Command() src.TcpHandler {
 				ctx.AbortAndCloseSourceConn()
 				return
 			}
-			ctx.Pipe = p
-			if _, err := conn.Write(commandSuccessReply(addr, ctx.Buffer())); err != nil {
+			ctx.SetTargetConn(target)
+			if _, err := conn.Write(commandSuccessReply(target.LocalAddr().String(), ctx.Buffer())); err != nil {
 				ctx.Logger.Errorf("fail to send command success reply, err=%s", err.Error())
-				if err := p.Close(); err != nil {
+				if err := target.Close(); err != nil {
 					ctx.Logger.Warningf("fail to close pipe, err=%s", err.Error())
 				}
 				ctx.Abort()

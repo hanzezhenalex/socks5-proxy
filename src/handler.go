@@ -21,11 +21,3 @@ func RecoveryHandler() TcpHandler {
 		ctx.Next()
 	})
 }
-
-func PipeHandler() TcpHandler {
-	return TcpHandleFunc(func(ctx *Context) {
-		ctx.Logger.Infof("start piping, target addr=%s", ctx.TargetAddr())
-		ctx.Pipe.Pipe()
-		ctx.Logger.Infof("finish piping")
-	})
-}

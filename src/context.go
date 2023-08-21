@@ -16,8 +16,8 @@ const (
 type Context struct {
 	correlationId uuid.UUID
 	Logger        *logrus.Entry
-	from          net.Conn
-	Pipe          *Pipe
+	from, to      net.Conn
+	buf           []byte
 
 	// for middleware
 	handlers  []TcpHandler
@@ -28,7 +28,6 @@ type Context struct {
 	Cmd  byte
 	Host string
 	Port string
-	buf  []byte
 }
 
 func NewContext(from net.Conn, handlers []TcpHandler) *Context {
@@ -46,8 +45,8 @@ func NewContext(from net.Conn, handlers []TcpHandler) *Context {
 
 func (c *Context) Close() {
 	_ = c.from.Close()
-	if c.Pipe != nil {
-		_ = c.Pipe.Close()
+	if c.to != nil {
+		_ = c.to.Close()
 	}
 }
 
@@ -86,4 +85,12 @@ func (c *Context) TargetAddr() string {
 
 func (c *Context) SourceConn() net.Conn {
 	return c.from
+}
+
+func (c *Context) SetTargetConn(conn net.Conn) {
+	c.to = conn
+}
+
+func (c *Context) Key() string {
+	return fmt.Sprintf("%s->%s", c.SourceConn().RemoteAddr().String(), c.Host)
 }
