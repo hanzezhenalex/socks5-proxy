@@ -66,23 +66,23 @@ func (p *Pipe) readLoop() {
 		p.ctx.Logger.Errorf("read loop err: %s", err.Error())
 		if rErr, ok := err.(*net.OpError); ok && rErr.Op == "read" {
 			if err := p.target.Close(); err != nil {
-				p.ctx.Logger.Warningf("fail to close source conn, err=%s", err.Error())
+				p.ctx.Logger.Warningf("fail to close target conn, err=%s", err.Error())
 			}
 		}
 	}
 
 	if err := p.source.Close(); err != nil {
-		p.ctx.Logger.Warningf("fail to close target conn, err=%s", err.Error())
+		p.ctx.Logger.Warningf("fail to close source conn, err=%s", err.Error())
 	}
 }
 
 func (p *Pipe) writeLoop() {
 	_, err := io.Copy(p, p.source)
 	if err != nil {
-		p.ctx.Logger.Errorf("read loop err: %s", err.Error())
+		p.ctx.Logger.Errorf("write loop err: %s", err.Error())
 		if rErr, ok := err.(*net.OpError); ok && rErr.Op == "read" {
 			if err := p.source.Close(); err != nil {
-				p.ctx.Logger.Warningf("fail to close source conn, err=%s", err.Error())
+				p.ctx.Logger.Warningf("fail to close target conn, err=%s", err.Error())
 			}
 		}
 	}
