@@ -5,7 +5,6 @@ import (
 	"io"
 	"net"
 	"strconv"
-	"time"
 
 	"socks5-proxy/src"
 )
@@ -44,18 +43,21 @@ func AuthMethodNegotiation(allowedMethods []byte) src.TcpHandler {
 		buf := ctx.Buffer()
 
 		if _, err := io.ReadFull(conn, buf[:2]); err != nil {
-			ctx.Error(err)
+			ctx.Logger.Warningf("fail to read message header from source conn, err=%s", err.Error())
+			ctx.Abort()
 			return
 		}
 
 		if err := checkVersion(buf[0]); err != nil {
-			ctx.Error(err)
+			ctx.Logger.Warningf("fail to check version, err=%s", err.Error())
+			ctx.AbortAndCloseSourceConn()
 			return
 		}
 
 		n := int(buf[1])
 		if _, err := io.ReadFull(conn, buf[:n]); err != nil {
-			ctx.Error(err)
+			ctx.Logger.Warningf("fail to read auth methods to source conn, err=%s", err.Error())
+			ctx.Abort()
 			return
 		}
 
@@ -63,7 +65,8 @@ func AuthMethodNegotiation(allowedMethods []byte) src.TcpHandler {
 			for _, provided := range buf[:n] {
 				if allowed == provided {
 					if _, err := conn.Write([]byte{version, provided}); err != nil {
-						ctx.Error(err)
+						ctx.Logger.Warningf("fail to send auth method to source conn, err=%s", err.Error())
+						ctx.Abort()
 					} else {
 						ctx.Auth = provided
 					}
@@ -73,7 +76,8 @@ func AuthMethodNegotiation(allowedMethods []byte) src.TcpHandler {
 		}
 
 		if _, err := conn.Write([]byte{version, noAcceptMethods}); err != nil {
-			ctx.Error(err)
+			ctx.Logger.Warningf("fail to send noAcceptMethods to source conn, err=%s", err.Error())
+			ctx.Abort()
 		}
 		ctx.Logger.Warningf("no accept methods")
 	})
@@ -86,9 +90,10 @@ func Auth() src.TcpHandler {
 			ctx.Logger.Info("no authentication required")
 		default:
 			ctx.Logger.Warningf("%x not implement yet", ctx.Auth)
-			if _, err := ctx.SourceConn().Write([]byte{version, noAcceptMethods}); err != nil {
-				ctx.Error(err)
+			if err := ctx.SourceConn().Close(); err != nil {
+				ctx.Logger.Warningf("fail to close source conn, err=%s", err.Error())
 			}
+			ctx.Abort()
 		}
 	})
 }
@@ -99,56 +104,72 @@ func CommandNegotiation(allowedMethods []byte) src.TcpHandler {
 		buf := ctx.Buffer()
 
 		if _, err := io.ReadFull(conn, buf[:3]); err != nil {
-			ctx.Error(err)
+			ctx.Logger.Errorf("fail to read header from source conn, err=%s", err.Error())
+			ctx.Abort()
 			return
 		}
-
 		if err := checkVersion(buf[0]); err != nil {
-			ctx.Error(err)
+			ctx.Logger.Errorf("fail to check version, err=%s", err.Error())
+			ctx.AbortAndCloseSourceConn()
 			return
 		}
-
-		if continue_, err := checkCommand(ctx, allowedMethods, buf); !continue_ || err != nil {
-			ctx.Error(err)
-			return
+		if continue_ := checkCommand(ctx, allowedMethods, buf); !continue_ {
+			ctx.Logger.Warningf("command not support, command=%x", ctx.Cmd)
+			if _, err := ctx.SourceConn().Write(commandErrorReply(commandNotSupport, buf)); err != nil {
+				ctx.Logger.Errorf("fail to send commandNotSupport reply to source conn, err=%s", err.Error())
+			}
+			ctx.AbortAndCloseSourceConn()
 		}
 
-		if continue_, err := readAddr(ctx, buf); !continue_ || err != nil {
-			ctx.Error(err)
-			return
-		}
-	})
-}
-
-func Command(timeout time.Duration) src.TcpHandler {
-	return src.TcpHandleFunc(func(ctx *src.Context) {
-		conn := ctx.SourceConn()
-
-		switch ctx.Cmd {
-		case Connect:
-			target, err := net.DialTimeout("tcp", ctx.TargetAddr(), timeout)
-			if err != nil {
-				if _, err := conn.Write(commandErrorReply(networkUnreachable, ctx.Buffer())); err != nil {
-					ctx.Logger.Warningf("fail to send reply, err=%s", err.Error())
-				}
-				ctx.Error(err)
-				return
-			}
-			ctx.To = target
-			if _, err := conn.Write(commandSuccessReply(ctx)); err != nil {
-				ctx.Error(err)
-			}
-		default:
-			ctx.Logger.Warningf("Cmd %x not implement yet", ctx.Cmd)
-			if _, err := conn.Write(commandErrorReply(generalSocksServerFailure, ctx.Buffer())); err != nil {
-				ctx.Logger.Warningf("fail to send reply, err=%s", err.Error())
-			}
+		continue_, err := readAddr(ctx, buf)
+		if !continue_ {
+			ctx.AbortAndCloseSourceConn()
+		} else if err != nil {
+			ctx.Logger.Errorf("fail to read addr from source conn, err=%s", err.Error())
 			ctx.Abort()
 		}
 	})
 }
 
-func checkCommand(ctx *src.Context, allowedMethods []byte, buf []byte) (bool, error) {
+func Command() src.TcpHandler {
+	return src.TcpHandleFunc(func(ctx *src.Context) {
+		conn := ctx.SourceConn()
+
+		switch ctx.Cmd {
+		case Connect:
+			p := src.NewPipe(ctx, nil)
+			addr, err := p.Dial(ctx.TargetAddr())
+			if err != nil {
+				ctx.Logger.Errorf("fail to connect to target conn, err=%s", err.Error())
+				if _, err := conn.Write(commandErrorReply(networkUnreachable, ctx.Buffer())); err != nil {
+					ctx.Logger.Warningf("fail to send reply, err=%s", err.Error())
+					ctx.Abort()
+					return
+				}
+				ctx.AbortAndCloseSourceConn()
+				return
+			}
+			ctx.Pipe = p
+			if _, err := conn.Write(commandSuccessReply(addr, ctx.Buffer())); err != nil {
+				ctx.Logger.Errorf("fail to send command success reply, err=%s", err.Error())
+				if err := p.Close(); err != nil {
+					ctx.Logger.Warningf("fail to close pipe, err=%s", err.Error())
+				}
+				ctx.Abort()
+			}
+		default:
+			ctx.Logger.Warningf("Cmd %x not implement yet", ctx.Cmd)
+			if _, err := conn.Write(commandErrorReply(generalSocksServerFailure, ctx.Buffer())); err != nil {
+				ctx.Logger.Warningf("fail to send reply, err=%s", err.Error())
+				ctx.Abort()
+				return
+			}
+			ctx.AbortAndCloseSourceConn()
+		}
+	})
+}
+
+func checkCommand(ctx *src.Context, allowedMethods []byte, buf []byte) bool {
 	ctx.Cmd = buf[1]
 	matched := false
 	for _, allowed := range allowedMethods {
@@ -156,14 +177,7 @@ func checkCommand(ctx *src.Context, allowedMethods []byte, buf []byte) (bool, er
 			matched = true
 		}
 	}
-
-	if !matched {
-		ctx.Logger.Warningf("command not support, command=%x", ctx.Cmd)
-		if _, err := ctx.SourceConn().Write(commandErrorReply(commandNotSupport, buf)); err != nil {
-			return false, err
-		}
-	}
-	return matched, nil
+	return matched
 }
 
 func readAddr(c *src.Context, buf []byte) (bool, error) {
@@ -240,9 +254,8 @@ func commandErrorReply(rep byte, buf []byte) []byte {
 	return ret
 }
 
-func commandSuccessReply(c *src.Context) []byte {
-	buf := c.Buffer()
+func commandSuccessReply(addr string, buf []byte) []byte {
 	buf = buf[:0]
 	buf = append(buf, version, succeed, rsv)
-	return parseAddr(c.To.LocalAddr().String(), buf)
+	return parseAddr(addr, buf)
 }

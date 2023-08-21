@@ -17,6 +17,7 @@ type Context struct {
 	correlationId uuid.UUID
 	Logger        *logrus.Entry
 	from          net.Conn
+	Pipe          *Pipe
 
 	// for middleware
 	handlers  []TcpHandler
@@ -27,7 +28,6 @@ type Context struct {
 	Cmd  byte
 	Host string
 	Port string
-	To   net.Conn
 	buf  []byte
 }
 
@@ -46,8 +46,8 @@ func NewContext(from net.Conn, handlers []TcpHandler) *Context {
 
 func (c *Context) Close() {
 	_ = c.from.Close()
-	if c.To != nil {
-		_ = c.To.Close()
+	if c.Pipe != nil {
+		_ = c.Pipe.Close()
 	}
 }
 
@@ -65,19 +65,19 @@ func (c *Context) Abort() {
 	c.nextIndex = handlerChainAbortIndex
 }
 
+func (c *Context) AbortAndCloseSourceConn() {
+	c.Abort()
+	if err := c.SourceConn().Close(); err != nil {
+		c.Logger.Warningf("fail to close source conn, err=%s", err.Error())
+	}
+}
+
 func (c *Context) Buffer() []byte {
 	return c.buf
 }
 
 func (c *Context) SetAuthMethod(m byte) {
 	c.Auth = m
-}
-
-func (c *Context) Error(err error) {
-	if err != nil {
-		c.Logger.Error(err)
-	}
-	c.Abort()
 }
 
 func (c *Context) TargetAddr() string {

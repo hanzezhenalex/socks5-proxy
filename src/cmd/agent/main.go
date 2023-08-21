@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -50,10 +49,10 @@ func main() {
 	s.Use(
 		protocol.AuthMethodNegotiation([]byte{protocol.NoAuthenticationRequired}),
 		protocol.Auth(),
-		protocol.ClientSayHello(time.Second*30, serverAddr),
+		protocol.ClientSayHello(serverAddr),
 	)
 
-	s.SetFinalHandler(src.Pipe())
+	s.SetFinalHandler(src.PipeHandler())
 
 	if err := s.ListenAndServe(); err != nil {
 		logrus.Errorf("an error happened when serve tcp, err=%s", err.Error())
