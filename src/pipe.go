@@ -8,77 +8,77 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type Pipe struct {
+type TcpConn interface {
+	net.Conn
+	CloseWrite() error
+	CloseRead() error
+}
+
+type TcpPiper struct {
 	ctx            *Context
-	source, target net.Conn
+	source, target TcpConn
 
-	stat *Statistic
+	quota *QuotaMngr
 }
 
-func NewPipe(ctx *Context, stat *Statistic) *Pipe {
-	return &Pipe{
+func NewTcpPiper(ctx *Context, quota *QuotaMngr) *TcpPiper {
+	p := &TcpPiper{
 		ctx:    ctx,
-		source: ctx.SourceConn(),
-		target: ctx.TargetConn(),
-		stat:   stat,
+		source: ctx.SourceConn().(*net.TCPConn),
+		quota:  quota,
 	}
+	target := ctx.TargetConn().(*net.TCPConn)
+	if quota != nil {
+		p.target = quota.WrapTcpConnection(target)
+	} else {
+		p.target = target
+	}
+	return p
 }
 
-func (p *Pipe) Read(buf []byte) (int, error) {
-	n, err := p.target.Read(buf)
-	p.stat.AddRead(int64(n))
-	return n, err
-}
-
-func (p *Pipe) Write(buf []byte) (int, error) {
-	n, err := p.target.Write(buf)
-	p.stat.AddWritten(int64(n))
-	return n, err
-}
-
-func (p *Pipe) Close() error {
+func (p *TcpPiper) Close() error {
 	if p.target == nil {
 		return nil
 	}
 	return p.target.Close()
 }
 
-func (p *Pipe) readLoop() {
-	_, err := io.Copy(p.source, p)
+func (p *TcpPiper) readLoop() {
+	_, err := io.Copy(p.source, p.target)
 	handleLoopError(err, p.source, p.target, p.ctx.Logger.WithField("loop", "read"))
 }
 
-func (p *Pipe) writeLoop() {
-	_, err := io.Copy(p, p.source)
+func (p *TcpPiper) writeLoop() {
+	_, err := io.Copy(p.target, p.source)
 	handleLoopError(err, p.target, p.source, p.ctx.Logger.WithField("loop", "write"))
 }
 
-func handleLoopError(err error, source, target net.Conn, logger *logrus.Entry) {
+func handleLoopError(err error, source, target TcpConn, logger *logrus.Entry) {
 	if err != nil {
 		logger.Errorf("loop err: %s", err.Error())
 		if rErr, ok := err.(*net.OpError); ok {
 			switch rErr.Op {
 			case "read":
-				if err := target.(*net.TCPConn).CloseWrite(); err != nil {
+				if err := target.CloseWrite(); err != nil {
 					logger.Warningf("fail to close(write) target conn, err=%s", err.Error())
 				}
 			case "write":
-				if err := source.(*net.TCPConn).CloseRead(); err != nil {
+				if err := source.CloseRead(); err != nil {
 					logger.Warningf("fail to close(read) source conn, err=%s", err.Error())
 				}
 			}
 		}
 		return
 	}
-	if err := source.(*net.TCPConn).CloseRead(); err != nil {
+	if err := source.CloseRead(); err != nil {
 		logger.Warningf("fail to close(read) source conn, err=%s", err.Error())
 	}
-	if err := target.(*net.TCPConn).CloseWrite(); err != nil {
+	if err := target.CloseWrite(); err != nil {
 		logger.Warningf("fail to close(write) target conn, err=%s", err.Error())
 	}
 }
 
-func (p *Pipe) Pipe() {
+func (p *TcpPiper) Pipe() {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	p.ctx.Logger.Infof("start piping, target addr=%s", p.ctx.TargetAddr())
