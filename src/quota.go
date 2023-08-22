@@ -29,7 +29,7 @@ func (quota *QuotaMngr) TryRead(n int64) bool {
 }
 
 func (quota *QuotaMngr) TryWrite(n int64) bool {
-	if left := atomic.AddInt64(&quota.quotaRead, -1*n); left < 0 {
+	if left := atomic.AddInt64(&quota.quotaWritten, -1*n); left < 0 {
 		return false
 	}
 	return true

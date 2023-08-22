@@ -46,7 +46,7 @@ func (mngr *ConnQuotaMngr) daemon() {
 	for {
 		select {
 		case <-analysisT.C:
-			_logger.Infof("[statistic] active=%d, read=%d, written=%d",
+			_logger.Infof("[statistic] active=%d, read quota=%d, written quota=%d",
 				atomic.LoadInt32(&mngr.active), atomic.LoadInt64(&mngr.quota.quotaRead), atomic.LoadInt64(&mngr.quota.quotaWritten))
 		case <-updateT.C:
 			mngr.quota.Update(defaultQuotaPerHour, defaultQuotaPerHour)
