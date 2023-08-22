@@ -3,6 +3,7 @@ module socks5-proxy
 go 1.19
 
 require (
+	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 )

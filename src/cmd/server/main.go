@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -18,8 +17,6 @@ var (
 	port  string
 	local bool
 )
-
-const defaultDialTimeout = time.Second * 30
 
 func parse() {
 	flag.StringVar(&ip, "ip", "0.0.0.0", "socks server ip")
@@ -39,10 +36,17 @@ func main() {
 	}
 
 	s := src.NewTcpServer(addr)
-	mngr := src.NewConnectionMngr()
+
+	var mngr src.ConnMngr
+	if local {
+		// agent will manage quota
+		mngr = src.NewConnQuotaMngr()
+	} else {
+		mngr = src.NewConnAccessMngr()
+	}
 
 	s.Use(src.RecoveryHandler())
-	registerMiddlewares(s, local)
+	registerMiddlewares(s, local, mngr.Dialer())
 	s.SetFinalHandler(mngr.PipeHandler())
 
 	if err := s.ListenAndServe(); err != nil {
@@ -51,10 +55,7 @@ func main() {
 	}
 }
 
-func registerMiddlewares(s *src.TcpServer, local bool) {
-	dialer := &net.Dialer{
-		Timeout: defaultDialTimeout,
-	}
+func registerMiddlewares(s *src.TcpServer, local bool, dialer src.Dialer) {
 	if local {
 		logrus.Info("running in local mode")
 		s.Use(
