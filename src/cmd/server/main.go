@@ -39,9 +39,10 @@ func main() {
 
 	var mngr src.ConnMngr
 	if local {
+		// agent will manage quota
 		mngr = src.NewConnQuotaMngr()
 	} else {
-		mngr = &src.ConnAccessMngr{}
+		mngr = src.NewConnAccessMngr()
 	}
 
 	s.Use(src.RecoveryHandler())

@@ -78,6 +78,12 @@ type ConnAccessMngr struct {
 	active int32
 }
 
+func NewConnAccessMngr() *ConnAccessMngr {
+	mngr := &ConnAccessMngr{}
+	go mngr.daemon()
+	return mngr
+}
+
 func (mngr *ConnAccessMngr) PipeHandler() TcpHandler {
 	return TcpHandleFunc(func(ctx *Context) {
 		p := NewTcpPiper(ctx, nil)
