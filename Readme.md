@@ -5,7 +5,9 @@ A proxy server based on socks version 5 protocol.
 ### Architecture
 In the design, we'll have two mode, local and remote. (remote mode is not support yet)<br>
 
-For local mode, only one socks server deployed. The server directly proxies the socks requests.
+For local mode, only one socks server deployed. The server directly proxies the socks requests.<br>
+
+<img src="https://github.com/hanzezhenalex/socks5-proxy/assets/131222191/4dc94a39-6a50-4fa5-b291-66f4b7a5a74b" width="800px" height="600px">
 
 ### How to use
 
