@@ -24,9 +24,8 @@ type ConnMngr interface {
 }
 
 type ConnQuotaMngr struct {
-	active int32
-	quota  *QuotaMngr
-	mngr   *ConnAccessMngr
+	quota *QuotaMngr
+	mngr  ConnMngr
 }
 
 func NewConnQuotaMngr() *ConnQuotaMngr {
@@ -35,32 +34,32 @@ func NewConnQuotaMngr() *ConnQuotaMngr {
 			quotaWritten: defaultQuotaPerHour,
 			quotaRead:    defaultQuotaPerHour,
 		},
+		mngr: NewConnAccessMngr(),
 	}
 	go mngr.daemon()
 	return mngr
 }
 
 func (mngr *ConnQuotaMngr) daemon() {
-	analysisT := time.NewTicker(defaultAnalysisDur)
 	updateT := time.NewTicker(updateDur)
 	for {
-		select {
-		case <-analysisT.C:
-			_logger.Infof("[statistic] active=%d, read quota=%d, written quota=%d",
-				atomic.LoadInt32(&mngr.active), atomic.LoadInt64(&mngr.quota.quotaRead), atomic.LoadInt64(&mngr.quota.quotaWritten))
-		case <-updateT.C:
-			mngr.quota.Update(defaultQuotaPerHour, defaultQuotaPerHour)
-		}
+		<-updateT.C
+		mngr.quota.Update(defaultQuotaPerHour, defaultQuotaPerHour)
 	}
 }
 
 func (mngr *ConnQuotaMngr) PipeHandler() TcpHandler {
+	fn := mngr.mngr.PipeHandler()
 	return TcpHandleFunc(func(ctx *Context) {
-		p := NewTcpPiper(ctx, mngr.quota)
-		atomic.AddInt32(&mngr.active, 1)
-		defer atomic.AddInt32(&mngr.active, -1)
-		// do pipe
-		p.Pipe()
+		target, ok := ctx.TargetConn().(*net.TCPConn)
+		if !ok {
+			ctx.Logger.Error("target connection is not TCP connection.")
+			ctx.Close()
+			return
+		}
+		ctx.SetTargetConn(mngr.quota.WrapTcpConnection(target))
+
+		fn.ServeTcp(ctx)
 	})
 }
 
@@ -86,7 +85,13 @@ func NewConnAccessMngr() *ConnAccessMngr {
 
 func (mngr *ConnAccessMngr) PipeHandler() TcpHandler {
 	return TcpHandleFunc(func(ctx *Context) {
-		p := NewTcpPiper(ctx, nil)
+		p, err := NewTcpPiper(ctx)
+		if err != nil {
+			ctx.Logger.Errorf("fail to create piper: err=%s", err.Error())
+			ctx.Close()
+			return
+		}
+
 		atomic.AddInt32(&mngr.active, 1)
 		defer atomic.AddInt32(&mngr.active, -1)
 		// do pipe

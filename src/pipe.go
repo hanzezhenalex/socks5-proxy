@@ -1,6 +1,7 @@
 package src
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -17,23 +18,23 @@ type TcpConn interface {
 type TcpPiper struct {
 	ctx            *Context
 	source, target TcpConn
-
-	quota *QuotaMngr
 }
 
-func NewTcpPiper(ctx *Context, quota *QuotaMngr) *TcpPiper {
+func NewTcpPiper(ctx *Context) (*TcpPiper, error) {
+	source, ok := ctx.SourceConn().(TcpConn)
+	if !ok {
+		return nil, fmt.Errorf("illeagal source connection")
+	}
+	target, ok := ctx.TargetConn().(TcpConn)
+	if !ok {
+		return nil, fmt.Errorf("illeagal target connection")
+	}
 	p := &TcpPiper{
 		ctx:    ctx,
-		source: ctx.SourceConn().(*net.TCPConn),
-		quota:  quota,
+		source: source,
+		target: target,
 	}
-	target := ctx.TargetConn().(*net.TCPConn)
-	if quota != nil {
-		p.target = quota.WrapTcpConnection(target)
-	} else {
-		p.target = target
-	}
-	return p
+	return p, nil
 }
 
 func (p *TcpPiper) Close() error {
