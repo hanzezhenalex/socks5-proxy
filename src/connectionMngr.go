@@ -25,7 +25,7 @@ type ConnMngr interface {
 
 type ConnQuotaMngr struct {
 	quota *QuotaMngr
-	mngr  *ConnAccessMngr
+	mngr  ConnMngr
 }
 
 func NewConnQuotaMngr() *ConnQuotaMngr {
