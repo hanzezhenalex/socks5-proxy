@@ -20,7 +20,7 @@ var (
 
 func parse() {
 	flag.StringVar(&ip, "ip", "0.0.0.0", "socks server ip")
-	flag.StringVar(&port, "port", "1081", "socks server port")
+	flag.StringVar(&port, "port", "1080", "socks server port")
 	flag.BoolVar(&local, "local", false, "use local mode")
 
 	flag.Parse()
