@@ -22,7 +22,7 @@ docker ps | grep socks5-server
 ```
 
 ### Development guide
-details see [here](https://github.com/hanzezhenalex/socks5-proxy/wiki/Architecture)
+details see [here](https://github.com/hanzezhenalex/socks5-proxy/wiki/Development-Guide)
 
 ### Reference
 SocksV5 RFC: https://www.rfc-editor.org/rfc/rfc1928 <br>
